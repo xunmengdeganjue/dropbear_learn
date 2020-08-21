@@ -80,6 +80,10 @@
 #include "compat.h"
 #include "scpmisc.h"
 #include "progressmeter.h"
+#include "dbutil.h"
+#include "session.h"
+
+extern int get_sessions_count(char *fname);
 
 void bwlimit(int);
 
@@ -427,6 +431,11 @@ main(int argc, char **argv)
 
 	(void) signal(SIGPIPE, lostconn);
 
+	/*check if the ssh session has been established*/
+	if(get_sessions_count(DROPBEAR_FILE) >=1){
+		dropbear_log(LOG_INFO, "SESSION CAN'T BE ESTABLISHED SINCE THE SIMULTANEOUS SESSION IS DISABLED!");
+		exit(1);
+	}
 	if ((targ = colon(argv[argc - 1])))	/* Dest is remote host. */
 		toremote(targ, argc, argv);
 	else {

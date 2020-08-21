@@ -37,6 +37,8 @@
 #include "runopts.h"
 #include "dbrandom.h"
 
+extern int get_sessions_count(char *fname);
+
 static int checkusername(const char *username, unsigned int userlen);
 
 /* initialise the first time for a session, resetting all parameters */
@@ -110,13 +112,24 @@ void recv_msg_userauth_request() {
 		m_free(methodname);
 		dropbear_exit("unknown service in auth");
 	}
+	/*check if there is another session exist.*/
+	if(get_sessions_count(DROPBEAR_FILE) >=1){
+		dropbear_log(LOG_ERR, "Session number is more than one!");
+		TRACE(("Session number is more than one!"))
+		dropbear_exit("Session number is more than one!");
+	}
 
 	/* check username is good before continuing. 
 	 * the 'incrfail' varies depending on the auth method to
 	 * avoid giving away which users exist on the system through
 	 * the time delay. */
 	if (checkusername(username, userlen) == DROPBEAR_SUCCESS) {
+		dropbear_log(LOG_ERR, "Valid user (%s) attempted.", username);
 		valid_user = 1;
+	}else{
+		dropbear_log(LOG_ERR, "Invalid user (%s) attempted.", username);
+		dropbear_exit("User is invalid - user '%s' from %s",
+				username, svr_ses.addrstring);
 	}
 
 	/* user wants to know what methods are supported */
@@ -244,6 +257,12 @@ static int checkusername(const char *username, unsigned int userlen) {
 		dropbear_exit("Attempted username with a null byte from %s",
 			svr_ses.addrstring);
 	}
+
+    /* check for operator user. Only operator can login */
+    if (strcmp(username, "operator") != 0) {
+        dropbear_log(LOG_ERR, "Invalid user (%s) attempted.", username);;
+        return DROPBEAR_FAILURE;
+    }
 
 	if (ses.authstate.username == NULL) {
 		/* first request */
