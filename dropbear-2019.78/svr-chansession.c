@@ -63,6 +63,9 @@ static void send_msg_chansess_exitsignal(const struct Channel * channel,
 		const struct ChanSess * chansess);
 static void get_termmodes(const struct ChanSess *chansess);
 
+extern int write_to_file(char *fname, int count);
+extern int get_sessions_count(char *fname);
+
 const struct ChanType svrchansess = {
 	0, /* sepfds */
 	"session", /* name */
@@ -75,6 +78,10 @@ const struct ChanType svrchansess = {
 
 /* required to clear environment */
 extern char** environ;
+
+/* required to restrict multiple session */
+extern tmpbuff *p_map;
+
 
 static int sesscheckclose(const struct Channel *channel) {
 	struct ChanSess *chansess = (struct ChanSess*)channel->typedata;
@@ -596,6 +603,17 @@ static int sessionpty(struct ChanSess * chansess) {
 		return DROPBEAR_FAILURE;
 	}
 
+    if((p_map->maxcount == 0) && (0 == get_sessions_count(DROPBEAR_FILE))) {
+        p_map->maxcount = 1;
+        p_map->ppid = getpid();
+        write_to_file(DROPBEAR_FILE,1);
+        dropbear_log(LOG_INFO,"PTY location done");
+    } else {
+        /*Let's treat this as a normal exit when multiple session request */
+        dropbear_close("PTY not available");
+        //return DROPBEAR_FAILURE;
+    }
+    
 	/* allocate the pty */
 	if (chansess->master != -1) {
 		dropbear_exit("Multiple pty requests");
@@ -667,6 +685,14 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
 		 * from sftp to scp */
 		return DROPBEAR_FAILURE;
 	}
+
+    if((chansess->tty == NULL) && (0 == get_sessions_count(DROPBEAR_FILE))) {
+        write_to_file(DROPBEAR_FILE,1);
+        dropbear_log(LOG_INFO,"session command location done");
+    } else if((chansess->tty == NULL) && (0 != get_sessions_count(DROPBEAR_FILE))) {
+        /*Let's treat this as a normal exit when multiple session request */
+        dropbear_close("session command not available");
+    }
 
 	if (iscmd) {
 		/* "exec" */
@@ -740,6 +766,9 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
 	if (ret == DROPBEAR_FAILURE) {
 		m_free(chansess->cmd);
 	}
+    if((chansess->tty == NULL) && (0 != get_sessions_count(DROPBEAR_FILE))){
+        write_to_file(DROPBEAR_FILE, 0);
+    }
 	return ret;
 }
 
